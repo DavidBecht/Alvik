@@ -67,6 +67,7 @@ http://172.20.10.6:80
 ⚠️ **Wichtig:**
 
 - Dein Computer oder Smartphone muss sich im gleichen WLAN-Netzwerk wie der Roboter befinden.
+- Dein Hotspot muss die Frequenz 2,4 GHz haben.
 - Falls nötig, stoppe den Webserver mit `Strg+C` in der Konsole.
 
 👉 **Jetzt bist du bereit, loszulegen!** 🥳
