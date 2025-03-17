@@ -2,7 +2,7 @@ import logging
 try:
     from logging.handlers import RotatingFileHandler
 except ImportError:
-    from esp32_logging_handler import RotatingFileHandler
+    from alvik_logger.esp32_logging_handler import RotatingFileHandler
 
 # Logger erstellen
 logger = logging.getLogger("ALVIKLogger")

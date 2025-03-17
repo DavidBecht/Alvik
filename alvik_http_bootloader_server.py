@@ -4,7 +4,7 @@ from socket import socket
 
 from alvik_http_server.alvik_async_python_runner import AlvikAsyncPythonRunner
 from alvik_http_server.alvik_http_server import AlvikHTTPServer
-from alvik_logger.logger import logger, get_error_message
+from alvik_logger.logger import logger
 
 try:
     import ure  # Im ESP32 heißt das Regexmodul ure
@@ -21,6 +21,7 @@ def endpoint_get_files(_: str, __: socket) -> Tuple[int, str]:
     file_list = "\n".join(files)  # Dateien als Textliste zurückgeben
     logger.debug(f"Current files on server: {files}")
     return 200, file_list
+
 def endpoint_upload_files(request: str, __: socket):
         _, header, file_content = request.split("\r\n\r\n", 2)
 
@@ -95,5 +96,5 @@ if __name__ == "__main__":
     controller.add_endpoint("GET /files", endpoint_get_files)
     controller.add_endpoint("POST /upload", endpoint_upload_files)
     controller.add_endpoint("GET /run?file=*.py", endpoint_run_py_file) # GET /run?file=
-    # controller.connect_to_wifi("David", "12345678")
+    controller.connect_to_wifi("david_htl_test", "12345678")
     controller.start_web_server()
