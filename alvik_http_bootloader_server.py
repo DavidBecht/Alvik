@@ -4,7 +4,7 @@ from socket import socket
 
 from alvik_http_server.alvik_async_python_runner import AlvikAsyncPythonRunner
 from alvik_http_server.alvik_http_server import AlvikHTTPServer
-from alvik_logger.logger import logger
+from alvik_logger.logger import logger, get_error_message
 
 try:
     import ure  # Im ESP32 heißt das Regexmodul ure
@@ -50,6 +50,7 @@ class LiveStream:
     def write(self, text):
         """Sendet jeden `print()`-Aufruf sofort weiter."""
         self.callback(text, self.client)  # Weiterleitung an den Client
+        logger.info(text)
 
     def flush(self):
         """Wird benötigt, damit `print()` korrekt funktioniert."""
@@ -59,23 +60,26 @@ def send_to_client(data, client):
     output = data.strip().replace("\n", "<br>")  # HTML-taugliche Zeilenumbrüche
     client.send(f"data: {output}\n\n".encode("utf-8"))
 
-runner = AlvikAsyncPythonRunner()
 def _run_python_file(filename: str, client: socket):
     """Startet eine Python-Datei und sendet deren Output in Echtzeit zurück."""
-    # with open(filename, "r") as f:
-    #     code = f.read()
-    # stream = LiveStream(send_to_client, client)
-    # namespace = {"print": lambda *args: stream.write(" ".join(map(str, args)) + "\n")}
-    # try:
-    #     exec(code, namespace)  # Code mit modifizierter `print()`-Funktion ausführen
-    # except Exception as e:
-    #     error_trace = get_error_message(e)
-    #     stream.write(f"Execution of {filename} failed with {e}.\n{error_trace}")  # Fehler auch sofort senden
-    #     logger.error(f"Execution of {filename} failed with {e}.\n{error_trace}")
-    # logger.info(f"Execution of {filename} completed.")
-    # return 200, "OK"
-    asyncio.run(runner.start(filename, client))
+    with open(filename, "r") as f:
+        code = f.read()
+    stream = LiveStream(send_to_client, client)
+    namespace = {"print": lambda *args: stream.write(" ".join(map(str, args)) + "\n")}
+    try:
+        exec(code, namespace)  # Code mit modifizierter `print()`-Funktion ausführen
+    except Exception as e:
+        error_trace = get_error_message(e)
+        stream.write(f"Execution of {filename} failed with {e}.\n{error_trace}")  # Fehler auch sofort senden
+        logger.error(f"Execution of {filename} failed with {e}.\n{error_trace}")
+    logger.info(f"Execution of {filename} completed.")
     return 200, "OK"
+    # from alvik_logger.logger import logger
+    # logger.info("returning 3")
+    # await asyncio.sleep(1)
+    # await runner.start(filename, client)
+    # logger.info("returning 1")
+    # return 200, "OK"
 
 def endpoint_run_py_file(request: str, client: socket) -> Tuple[int, str]:
     filename = request.split("GET /run?file=")[1].split(" ")[0]
@@ -88,13 +92,12 @@ def endpoint_run_py_file(request: str, client: socket) -> Tuple[int, str]:
         "Connection: keep-alive\r\n\r\n"
     )
     client.send(response.encode("utf-8"))
-    _run_python_file(filename, client)
-    return 200, "OK"
+    return _run_python_file(filename, client)
 
 if __name__ == "__main__":
     controller = AlvikHTTPServer("bootloader_index.html")
     controller.add_endpoint("GET /files", endpoint_get_files)
     controller.add_endpoint("POST /upload", endpoint_upload_files)
     controller.add_endpoint("GET /run?file=*.py", endpoint_run_py_file) # GET /run?file=
-    controller.connect_to_wifi("david_htl_test", "12345678")
+    controller.connect_to_wifi("FRITZ!Box 6660 Cable ED", "89755110268842584875")
     controller.start_web_server()

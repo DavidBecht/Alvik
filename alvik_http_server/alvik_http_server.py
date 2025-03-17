@@ -51,6 +51,8 @@ class AlvikHTTPServer:
         self._registered_endpoints = {}
         self.add_endpoint("GET /", lambda _, __: self._html)
 
+
+
     def connect_to_wifi(self, ssid:str, password:str) -> str:
         """!
         Stellt eine Verbindung zum WLAN her.
@@ -63,9 +65,22 @@ class AlvikHTTPServer:
         wlan = network.WLAN(network.STA_IF)
         wlan.active(True)
         wlan.disconnect()  # Trenne vorherige Verbindung, falls vorhanden
-        # wlan.ifconfig(("192.168.1.50", "255.255.255.0", "192.168.1.1", "8.8.8.8"))
+
+        wlan = network.WLAN(network.STA_IF)  # WLAN im Station-Modus (Client)
+        wlan.active(True)
+
+        logger.info("Scanne nach WLANs...")
+        networks = wlan.scan()
+
+        networks_str_list = []
+        for net in networks:
+            networks_str_list.append(f"{net[0].decode()} (Signal: {net[3]} dBm)")
+        logger.info(f"Gefundene WLANs: {networks_str_list}")
+
+        logger.info("Scan abgeschlossen.")
+
         wlan.connect(self._ssid, self._password)
-        print("Connecting to Wi-Fi...")
+        logger.info("Connecting to Wi-Fi...")
         timeout = 20
         start_time = time.time()
         while not wlan.isconnected():
@@ -76,11 +91,13 @@ class AlvikHTTPServer:
                 raise Exception("WLAN-Verbindung fehlgeschlagen (Timeout)")
             status = wlan.status()
             if status == network.STAT_WRONG_PASSWORD:
-                status = "Falsches WLAN-Passwort"
+                status = f"{status}:Falsches WLAN-Passwort"
             elif status == network.STAT_NO_AP_FOUND:
-                status = "WLAN-SSID nicht gefunden"
+                status = f"{status}:WLAN-SSID nicht gefunden"
             elif status == network.STAT_CONNECTING:
-                status = "Am verbinden"
+                status = f"{status}:Am verbinden"
+            else:
+                status = f"{status}:unkown"
             logger.info(f"Trying to connect to WIFI. Status: {status}")
             time.sleep(1)  # Kurze Pause, um CPU zu schonen
         print("Connected to Wi-Fi")
@@ -177,7 +194,8 @@ class AlvikHTTPServer:
                     elif isinstance(response_content, str):
                         self._send_response(cl, 200, response_content)  # HTTP Response 200, Message
                     else:
-                        raise ValueError("Wrong return value of endpoint")
+                        logger.error("Wrong return value of endpoint")
+                        # raise ValueError("Wrong return value of endpoint")
                 else:
                     logger.debug(f"Endpoint {endpoint} not found")
                     self._send_response(cl, 404, "Endpoint not found.")

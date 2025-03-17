@@ -11,25 +11,20 @@ class AlvikAsyncPythonRunner:
     def __init__(self):
         self.task = None  # Speichert den laufenden Task
 
-    @staticmethod
-    def send_to_client(data, client):
-        output = data.strip().replace("\n", "<br>")  # HTML-taugliche Zeilenumbrüche
-        client.send(f"data: {output}\n\n".encode("utf-8"))
-
     async def run_python_file(self, filename: str, client: socket):
         """Startet eine Python-Datei und sendet deren Output in Echtzeit zurück."""
         with open(filename, "r") as f:
             code = f.read()
-
-        stream = AlvikExecPrint(AlvikAsyncPythonRunner.send_to_client, client)
-
+        stream = AlvikExecPrint(client)
+        logger.info(f"Starting script: {filename}.")
+        stream.write(f"Starting script: {filename}.")
         try:
             exec(code, stream.namespace)  # Führe den Code mit modifizierter `print()`-Funktion aus
         except Exception as e:
             error_trace = get_error_message(e)
-            stream.write(f"Execution of {filename} failed with {e}.\n{error_trace}")  # Fehler auch sofort senden
-            logger.error(f"Execution of {filename} failed with {e}.\n{error_trace}")
-
+            error_msg = f"Execution of {filename} failed with {e}.\n{error_trace}"
+            logger.error(error_msg)
+            stream.write(error_msg)
         logger.info(f"Execution of {filename} completed.")
 
     async def start(self, filename: str, client: socket):
@@ -39,7 +34,8 @@ class AlvikAsyncPythonRunner:
             await self.stop()
 
         self.task = asyncio.create_task(self.run_python_file(filename, client))
-        print(f"Starte {filename}...")
+        logger.info(f"Execution of {filename} completed.")
+
 
     async def stop(self):
         """Stoppt das aktuell laufende Python-Skript."""
