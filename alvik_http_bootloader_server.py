@@ -66,6 +66,8 @@ def _run_python_file(filename: str, client: socket):
         code = f.read()
     stream = LiveStream(send_to_client, client)
     namespace = {"print": lambda *args: stream.write(" ".join(map(str, args)) + "\n")}
+    logger.info(f"Running file {filename}")
+    stream.write(f"Running file {filename}")
     try:
         exec(code, namespace)  # Code mit modifizierter `print()`-Funktion ausführen
     except Exception as e:
@@ -84,7 +86,7 @@ def _run_python_file(filename: str, client: socket):
 def endpoint_run_py_file(request: str, client: socket) -> Tuple[int, str]:
     filename = request.split("GET /run?file=")[1].split(" ")[0]
     # filename = os.path.basename(filename)  # Sicherheit: Keine Pfade zulassen
-    logger.info(f"Running file {filename}")
+
     response = (
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: text/event-stream\r\n"
