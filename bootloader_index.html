@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drag & Drop File Upload</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f4;
+        }
+
+        .file-container {
+            width: 420px;
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: white;
+            padding: 10px;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+        .drop-zone {
+            width: 400px;
+            height: 200px;
+            border: 2px dashed #ccc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background-color: white;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .drop-zone:hover {
+            background-color: #f1f1f1;
+        }
+
+        .drop-zone.dragover {
+            border-color: #007bff;
+            background-color: #e0f7ff;
+        }
+
+        .file-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .file-list li {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .file-list li:hover {
+            background-color: #e0f7ff;
+        }
+
+        .file-list li.selected {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .console-container {
+            width: 420px;
+            height: 200px;
+            background-color: black;
+            color: limegreen;
+            font-family: monospace;
+            padding: 10px;
+            overflow-y: auto;
+            border: 2px solid #444; /* Rand hinzugefügt */
+            border-radius: 5px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+        }
+
+        .error {
+            color: red; /* Fehlermeldungen in rot */
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Dateiliste über dem Upload-Bereich -->
+    <div class="file-container">
+        <strong>Server Files:</strong>
+        <ul class="file-list" id="serverFileList"></ul>
+    </div>
+
+    <button id="startButton" disabled>Start Selected File</button>
+
+    <!-- Live-Konsolenausgabe -->
+    <div class="console-container" id="consoleOutput">Console Output:</div>
+
+    <!-- Drag & Drop Bereich -->
+    <div class="drop-zone" id="dropZone">
+        <p>Drag & Drop files here or click to upload</p>
+        <input type="file" id="fileInput" multiple hidden>
+    </div>
+
+    <!-- Hochzuladende Dateien -->
+    <ul class="file-list" id="fileList"></ul>
+
+    <!-- Button zum Hochladen -->
+    <button id="uploadButton" disabled>Upload starten</button>
+
+    <script>
+        const dropZone = document.getElementById("dropZone");
+        const fileInput = document.getElementById("fileInput");
+        const fileList = document.getElementById("fileList");
+        const uploadButton = document.getElementById("uploadButton");
+        const serverFileList = document.getElementById("serverFileList");
+        const startButton = document.getElementById("startButton");
+        const consoleOutput = document.getElementById("consoleOutput");
+
+        let selectedFiles = []; // Speichert die Dateien für den späteren Upload
+        let selectedFile = null;
+
+        // Klick-Event für Dateiauswahl
+        dropZone.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", () => handleFiles(fileInput.files));
+
+        // Drag & Drop-Handling
+        dropZone.addEventListener("dragover", (event) => {
+            event.preventDefault();
+            dropZone.classList.add("dragover");
+        });
+
+        dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+
+        dropZone.addEventListener("drop", (event) => {
+            event.preventDefault();
+            dropZone.classList.remove("dragover");
+            handleFiles(event.dataTransfer.files);
+        });
+
+        // Dateien vom Server abrufen und anzeigen
+        function fetchFileList() {
+            fetch("/files")
+                .then(response => response.text())
+                .then(data => {
+                    const allowedExtensions = [".py", ".log"];
+                    const files = data.split("\n").filter(f =>
+                        allowedExtensions.some(ext => f.trim().endsWith(ext))
+                    );
+                    serverFileList.innerHTML = "";
+
+                    files.forEach(file => {
+                        const listItem = document.createElement("li");
+                        listItem.textContent = file;
+
+                        listItem.addEventListener("click", () => {
+                            document.querySelectorAll(".file-list li").forEach(li => li.classList.remove("selected"));
+                            listItem.classList.add("selected");
+                            selectedFile = file;
+                            startButton.disabled = false;
+                        });
+
+                        serverFileList.appendChild(listItem);
+                    });
+                })
+                .catch(error => console.error("Fehler beim Abrufen der Dateien:", error));
+        }
+
+        // Direkt beim Laden der Seite die Datei-Liste abrufen
+        document.addEventListener("DOMContentLoaded", fetchFileList);
+
+        function handleFiles(files) {
+            for (const file of files) {
+                const existingFileIndex = selectedFiles.findIndex(f => f.name === file.name);
+
+                if (existingFileIndex !== -1) {
+                    // Falls die Datei bereits existiert, entfernen und neu hinzufügen (Upload-Reset)
+                    selectedFiles.splice(existingFileIndex, 1);
+                    document.querySelector(`li[data-filename="${file.name}"]`).remove();
+                }
+
+                selectedFiles.push(file);
+
+                const listItem = document.createElement("li");
+                listItem.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+                listItem.dataset.filename = file.name;
+
+                // Fortschrittsanzeige erstellen
+                const progressContainer = document.createElement("div");
+                progressContainer.style.width = "100%";
+                progressContainer.style.backgroundColor = "#eee";
+                progressContainer.style.marginTop = "5px";
+                progressContainer.style.borderRadius = "5px";
+
+                const progressBar = document.createElement("div");
+                progressBar.style.width = "0%";
+                progressBar.style.height = "10px";
+                progressBar.style.backgroundColor = "#007bff";
+                progressBar.style.borderRadius = "5px";
+                progressBar.style.transition = "width 0.2s";
+
+                progressContainer.appendChild(progressBar);
+                listItem.appendChild(progressContainer);
+                fileList.appendChild(listItem);
+            }
+
+            // Upload-Button aktivieren
+            uploadButton.disabled = selectedFiles.length === 0;
+        }
+
+        // Button-Click: Upload starten
+        uploadButton.addEventListener("click", () => {
+            if (selectedFiles.length === 0) return;
+
+            for (const file of selectedFiles) {
+                const progressBar = document.querySelector(`li[data-filename="${file.name}"] div div`);
+                uploadFile(file, progressBar);
+            }
+
+            // Nach dem Upload die Dateiliste neu laden
+            setTimeout(fetchFileList, 2000);
+
+            uploadButton.disabled = true;
+            selectedFiles = [];
+        });
+
+        function uploadFile(file, progressBar) {
+            const formData = new FormData();
+            formData.append("file", file, file.name);
+            console.log("Hochzuladende Datei:", file.name, "Größe:", file.size);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "/upload", true);
+
+            // Fortschritt überwachen
+            xhr.upload.onprogress = function(event) {
+                if (event.lengthComputable) {
+                    const percentComplete = Math.round((event.loaded / event.total) * 100);
+                    progressBar.style.width = percentComplete + "%";
+                }
+            };
+
+            // Upload abgeschlossen
+            xhr.onload = function() {
+                if (xhr.status == 200) {
+                    progressBar.style.backgroundColor = "green";
+                    console.log("Upload erfolgreich:", xhr.responseText);
+                } else {
+                    progressBar.style.backgroundColor = "red";
+                    console.error("Fehler beim Hochladen:", xhr.responseText);
+                }
+            };
+
+            xhr.onerror = function() {
+                progressBar.style.backgroundColor = "red";
+                console.error("Fehler beim Upload");
+            };
+
+            xhr.send(formData);
+        }
+
+       startButton.addEventListener("click", () => {
+            if (!selectedFile) return;
+
+            consoleOutput.innerHTML = `Starting ${selectedFile}...<br>`;
+
+            const eventSource = new EventSource(`/run?file=${encodeURIComponent(selectedFile)}`);
+
+            let errorBuffer = [];  // Speichert vollständige Fehler
+
+            eventSource.onmessage = (event) => {
+                let data = event.data;
+
+                if (data.startsWith("ERROR:")) {
+                    errorBuffer.push(data.replace("ERROR:", "").trim());  // Fehler sammeln
+                } else {
+                    if (errorBuffer.length > 0) {
+                        // Falls zuvor ein Fehler gesammelt wurde, jetzt ausgeben
+                        consoleOutput.innerHTML += `<span class="error">ERROR:<br>${errorBuffer.join("<br>")}</span><br>`;
+                        errorBuffer = [];  // Buffer zurücksetzen
+                    }
+                    consoleOutput.innerHTML += data + "<br>";
+                }
+
+                consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            };
+
+            eventSource.onerror = () => {
+                if (errorBuffer.length > 0) {
+                    // Falls am Ende des Streams noch Fehler gespeichert sind, ausgeben
+                    consoleOutput.innerHTML += `<span class="error">ERROR:<br>${errorBuffer.join("<br>")}</span><br>`;
+                }
+                consoleOutput.innerHTML += "<br><strong>Process stopped.</strong>";
+                eventSource.close();
+            };
+        });
+
+
+    </script>
+</body>
+</html>
