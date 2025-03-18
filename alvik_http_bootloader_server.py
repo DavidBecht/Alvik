@@ -101,5 +101,5 @@ if __name__ == "__main__":
     controller.add_endpoint("GET /files", endpoint_get_files)
     controller.add_endpoint("POST /upload", endpoint_upload_files)
     controller.add_endpoint("GET /run?file=*.py", endpoint_run_py_file) # GET /run?file=
-    controller.connect_to_wifi("FRITZ!Box 6660 Cable ED", "89755110268842584875")
+    controller.connect_to_wifi("ssid", "pw")
     controller.start_web_server()
