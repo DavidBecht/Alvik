@@ -92,10 +92,11 @@ class AlvikHTTPServer:
         server = await asyncio.start_server(self._handle_client, ip, port, backlog=5)
         logger.info(f"Server running on http://{ip}:{port}")
         while True:
-            await asyncio.sleep(1)  # MicroPython hat kein serve_forever(), also brauchen wir eine Endlosschleife
+            await asyncio.sleep(0.1)  # MicroPython hat kein serve_forever(), also brauchen wir eine Endlosschleife
 
     async def _handle_client(self, reader, writer):
         logger.info(f"Client connected.")
+        response_content = None
         try:
             request_str = await self._receive_entire_http_request(reader)
             writer = UPYStreamWriter(writer)
@@ -121,7 +122,7 @@ class AlvikHTTPServer:
                     await writer.send_response(200, response_content)  # HTTP Response 200, Message
                 else:
                     logger.error("Wrong return value of endpoint")
-                    # raise ValueError("Wrong return value of endpoint")
+                    raise ValueError("Wrong return value of endpoint")
             else:
                 logger.error(f"Endpoint {endpoint} not found")
                 await writer.send_response(404, "Endpoint not found")

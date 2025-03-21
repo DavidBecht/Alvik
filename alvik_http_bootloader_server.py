@@ -75,7 +75,7 @@ class LiveStream:
             while self.msg_queue:
                 try:
                     text = self.msg_queue.popleft()
-                    print(text)
+                    # print(text)
                     if text == self.exit_msg:
                         exit = True
                         break
