@@ -1,8 +1,9 @@
 from asyncio import StreamReader
-from alvik_utils.upy_streamwriter import UPYStreamWriter
+from alvik_utils.upy_streamwriter import UPYStreamWriter, HTTP_STATUS_CODES
+from alvik_utils.utils import get_error_message
 from alvik_wlan.alvik_wlan import AlvikWlan
 import socket
-from alvik_logger.logger import logger, get_error_message
+from alvik_logger.logger import logger
 try:
     import uasyncio as asyncio
 except ImportError:
@@ -23,7 +24,13 @@ try:
 except ImportError:
     pass
 
+
+
 class AlvikHTTPServer:
+
+    class SPECIAL_RESPONSE_CODES:
+        STREAM = 1111
+
     def __init__(self, filepath_index_html:str):
         """!
         Initialisiert die AlvikWebController-Klasse.
@@ -77,7 +84,6 @@ class AlvikHTTPServer:
          @return (int, String) -> HTTP Repsonse mit HTTP Status Code (int)
          @return Bytes -> RAW-Response
         """
-        # self._registered_endpoints[endpoint_url] = callback
         escaped = self._regex_escape(endpoint_url)  # Escaped alle Zeichen (z. B. / -> \/, . -> \.)
         regex_with_wildcard = ure.sub(r'\\\*', r'.*', escaped)
         self._registered_endpoints[endpoint_url] = {"callback": callback, "regex": ure.compile("^" + regex_with_wildcard + "$")}
@@ -104,8 +110,9 @@ class AlvikHTTPServer:
             if len(matches) > 0 and matches[0] is not None:
                 logger.debug(f"Handling request for {endpoint}")
                 response_content = await matches[0]["callback"](request_str, writer)
-
-                if isinstance(response_content, bytes):
+                if response_content == AlvikHTTPServer.SPECIAL_RESPONSE_CODES.STREAM:
+                    return # in case of streams we can not close the writer!
+                elif isinstance(response_content, bytes):
                     await writer.awrite(response_content)  # RAW Response
                 elif isinstance(response_content, tuple) and len(response_content) == 2 and \
                         isinstance(response_content[0], int) and isinstance(response_content[1], str):
@@ -114,7 +121,7 @@ class AlvikHTTPServer:
                     await writer.send_response(200, response_content)  # HTTP Response 200, Message
                 else:
                     logger.error("Wrong return value of endpoint")
-                    raise ValueError("Wrong return value of endpoint")
+                    # raise ValueError("Wrong return value of endpoint")
             else:
                 logger.error(f"Endpoint {endpoint} not found")
                 await writer.send_response(404, "Endpoint not found")
@@ -124,7 +131,8 @@ class AlvikHTTPServer:
             await writer.send_response(500, f"Error: {str(e)}")
         finally:
             logger.info("Client request handled.")
-            await writer.aclose()
+            if response_content != AlvikHTTPServer.SPECIAL_RESPONSE_CODES.STREAM:
+                await writer.aclose()
 
     def start_web_server(self, ip="0.0.0.0", port=80):
         """!

@@ -1,8 +1,14 @@
+import _thread
+import asyncio
 import os
 from socket import socket
 from alvik_http_server.alvik_http_server import AlvikHTTPServer
-from alvik_logger.logger import logger, get_error_message
+from alvik_logger.logger import logger
+from alvik_utils.upy_code_runner import UPYCodeRunner
 from alvik_utils.upy_streamwriter import UPYStreamWriter
+from collections import deque
+
+from alvik_utils.utils import get_error_message
 
 try:
     import ure  # Im ESP32 heißt das Regexmodul ure
@@ -40,9 +46,15 @@ async def endpoint_upload_files(request: str, __: socket):
         return 200, f"Datei '{filename}' erfolgreich gespeichert."
 
 class LiveStream:
+    exit_msg = "__EXIT__LIVESTREAM__"
     """Ersetzt `print()`, um Ausgabe live an den Client zu senden."""
     def __init__(self, writer: UPYStreamWriter):
-        self.writer = writer
+        self.writer: UPYStreamWriter = writer
+        self.msg_queue = deque()
+        self.stop = False
+
+    def __del__(self):
+        self.stop = True
 
     async def awrite(self, text):
         """Sendet jeden `print()`-Aufruf sofort weiter."""
@@ -52,9 +64,30 @@ class LiveStream:
 
     def write(self, text):
         """Sendet jeden `print()`-Aufruf sofort weiter."""
-        logger.info(text)
-        output = text.strip().replace("\n", "<br>")  # HTML-taugliche Zeilenumbrüche
-        self.writer.write(f"data: {output}\n\n".encode("utf-8"))
+        self.msg_queue.append(text)
+        # logger.info(text)
+        # output = text.strip().replace("\n", "<br>")  # HTML-taugliche Zeilenumbrüche
+        # asyncio.run(self.writer.awrite(f"data: {output}\n\n".encode("utf-8")))
+
+    async def stream_writer_loop(self):
+        exit = False
+        while not exit:
+            while self.msg_queue:
+                try:
+                    text = self.msg_queue.popleft()
+                    print(text)
+                    if text == self.exit_msg:
+                        exit = True
+                        break
+                    await self.awrite(text)
+                except ConnectionResetError:
+                    logger.warning("Client hat die Verbindung getrennt.")
+                    exit = True
+                    break
+            await asyncio.sleep(0.1)
+        logger.info(f"Execution completed.")
+        await self.writer.send_response(200)
+        await self.writer.aclose()
 
     def print(self, *args):
         self.write(" ".join(map(str, args)))
@@ -63,34 +96,24 @@ class LiveStream:
         """Wird benötigt, damit `print()` korrekt funktioniert."""
         pass
 
+    def close(self):
+        self.msg_queue.append(self.exit_msg)
 
-
-async def _run_python_file(filename: str, writer: UPYStreamWriter):
-    """Startet eine Python-Datei und sendet deren Output in Echtzeit zurück."""
-    with open(filename, "r") as f:
-        code = f.read()
-    stream = LiveStream(writer)
-
-    namespace = {"print": stream.print}
-    await stream.awrite(f"Running file {filename}")
+def run_user_code(code, namespace, stream: LiveStream, filename):
     try:
         exec(code, namespace)  # Code mit modifizierter `print()`-Funktion ausführen
     except Exception as e:
         error_trace = get_error_message(e)
-        await stream.awrite(f"ERROR:Execution of {filename} failed with {e}.\n{error_trace}")  # Fehler auch sofort senden
-    logger.info(f"Execution of {filename} completed.")
-    return 200, "OK"
-    # from alvik_logger.logger import logger
-    # logger.info("returning 3")
-    # await asyncio.sleep(1)
-    # await runner.start(filename, client)
-    # logger.info("returning 1")
-    # return 200, "OK"
+        stream.write(f"ERROR:Execution of {filename} failed with {e}.\n{error_trace}")  # Fehler auch sofort senden
+    finally:
+        stream.close()
+
+async def _run_python_file(filename: str, writer: UPYStreamWriter):
+    """Startet eine Python-Datei und sendet deren Output in Echtzeit zurück."""
+    await UPYCodeRunner(filename, writer).run_file()
 
 async def endpoint_run_py_file(request: str, writer: UPYStreamWriter) -> Tuple[int, str]:
     filename = request.split("GET /run?file=")[1].split(" ")[0]
-    # filename = os.path.basename(filename)  # Sicherheit: Keine Pfade zulassen
-
     response = (
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: text/event-stream\r\n"
@@ -98,7 +121,8 @@ async def endpoint_run_py_file(request: str, writer: UPYStreamWriter) -> Tuple[i
         "Connection: keep-alive\r\n\r\n"
     )
     await writer.awrite(response.encode("utf-8"))
-    return await _run_python_file(filename, writer)
+    await _run_python_file(filename, writer)
+    return AlvikHTTPServer.SPECIAL_RESPONSE_CODES.STREAM
 
 if __name__ == "__main__":
     controller = AlvikHTTPServer("bootloader_index.html")

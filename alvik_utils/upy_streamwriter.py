@@ -18,10 +18,11 @@ HTTP_STATUS_CODES = {
 }
 class UPYStreamWriter:
     def __init__(self, writer: StreamWriter):
-        self.writer = writer
-        self.is_micropython = is_micropython()
+        self._writer = writer
+        self._is_micropython = is_micropython()
+        self.keep_open = False  # in case of streams
 
-    async def send_response(self, http_status_code: int, content: str, content_type:str="text/plain", connection:str="close") -> None:
+    async def send_response(self, http_status_code: int, content: str="", content_type:str="text/plain", connection:str="close") -> None:
         response = f"HTTP/1.1 {http_status_code} {HTTP_STATUS_CODES.get(http_status_code, 'Unknown')}\r\n"
         response += f"Content-Type: {content_type}\r\n"
         response += f"Connection: {connection}\r\n\r\n"
@@ -31,18 +32,18 @@ class UPYStreamWriter:
             await self.aclose()
 
     async def awrite(self, data: bytes) -> None:
-        if self.is_micropython:
-            await self.writer.awrite(data)
+        if self._is_micropython:
+            await self._writer.awrite(data)
         else:
-            self.writer.write(data)
-            await self.writer.drain()
+            self._writer.write(data)
+            await self._writer.drain()
 
     def write(self, data: bytes):
-        self.writer.write(data)
+        self._writer.write(data)
 
     async def aclose(self):
-        if self.is_micropython:
-            await self.writer.aclose()
+        if self._is_micropython:
+            await self._writer.aclose()
         else:
-            self.writer.close()
-            await self.writer.wait_closed()
+            self._writer.close()
+            await self._writer.wait_closed()

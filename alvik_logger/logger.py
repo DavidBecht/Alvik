@@ -33,13 +33,3 @@ def logger_test():
   logger.error("Das ist eine Fehler-Meldung.")
   logger.critical("Das ist eine kritische Meldung.")
 
-def get_error_message(exception: Exception) -> str:
-    try:
-        import traceback
-        return traceback.format_exc()
-    except ImportError:
-        import sys
-        import io
-        buf = io.StringIO()
-        sys.print_exception(exception, buf)
-        return buf.getvalue()
