@@ -97,7 +97,13 @@
         <ul class="file-list" id="serverFileList"></ul>
     </div>
 
-    <button id="startButton" disabled>Start Selected File</button>
+    <div class="buttons">
+        <div class="action_btn">
+            <button id="startButton">Start</button>
+            <button id="stopButton">Stop</button>
+            <p></p>
+        </div>
+    </div>
 
     <!-- Live-Konsolenausgabe -->
     <div class="console-container" id="consoleOutput">Console Output:</div>
@@ -121,6 +127,7 @@
         const uploadButton = document.getElementById("uploadButton");
         const serverFileList = document.getElementById("serverFileList");
         const startButton = document.getElementById("startButton");
+        const stopButton = document.getElementById("stopButton");
         const consoleOutput = document.getElementById("consoleOutput");
 
         let selectedFiles = []; // Speichert die Dateien für den späteren Upload
@@ -266,7 +273,12 @@
         }
 
        startButton.addEventListener("click", () => {
-            if (!selectedFile) return;
+            if (!selectedFile)
+            {
+                consoleOutput.innerHTML = `No File selected<br>`;
+                return;
+            }
+
 
             consoleOutput.innerHTML = `Starting ${selectedFile}...<br>`;
 
@@ -296,9 +308,22 @@
                     // Falls am Ende des Streams noch Fehler gespeichert sind, ausgeben
                     consoleOutput.innerHTML += `<span class="error">ERROR:<br>${errorBuffer.join("<br>")}</span><br>`;
                 }
-                consoleOutput.innerHTML += "<br><strong>Process stopped.</strong>";
+                consoleOutput.innerHTML += "<br><strong>Process stopped.</strong><br>";
                 eventSource.close();
             };
+        });
+
+        stopButton.addEventListener("click", () => {
+            consoleOutput.innerHTML += `Stopping ${selectedFile}...<br>`;
+
+            fetch("/stop")
+                .then(response => response.text())
+                .then(text => {
+                    consoleOutput.innerHTML += `${text}<br>`;
+                })
+                .catch(err => {
+                    consoleOutput.innerHTML += `${err}<br>`;
+                });
         });
 
 

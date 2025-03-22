@@ -94,6 +94,7 @@ class AlvikHTTPServer:
         while True:
             await asyncio.sleep(0.1)  # MicroPython hat kein serve_forever(), also brauchen wir eine Endlosschleife
 
+
     async def _handle_client(self, reader, writer):
         logger.info(f"Client connected.")
         response_content = None
@@ -143,6 +144,7 @@ class AlvikHTTPServer:
         """
         self._read_index_html()
         asyncio.run(self._start_async_web_server(ip, port))
+
 
     def _regex_escape(self, s: str) -> str:
         """Escape für reguläre Ausdrücke in MicroPython (ersetzt `re.escape()`)."""
